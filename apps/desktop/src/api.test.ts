@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioApi } from "./api.js";
+import { realtimeWebSocketUrl, StudioApi } from "./api.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -25,5 +25,11 @@ describe("StudioApi token rotation", () => {
 
     expect(refreshCalls).toBe(1);
     expect(onTokens).toHaveBeenCalledWith("new-access", "new-refresh");
+  });
+});
+
+describe("StudioApi reverse proxy paths", () => {
+  it("preserves the API base path for realtime WebSockets", () => {
+    expect(realtimeWebSocketUrl("https://www.monacraft.net/studio-api", "project-id", "ticket-value").toString()).toBe("wss://www.monacraft.net/studio-api/api/v1/projects/project-id/realtime?ticket=ticket-value");
   });
 });

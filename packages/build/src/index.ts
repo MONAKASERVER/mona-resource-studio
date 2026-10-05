@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { zipSync, unzipSync } from "fflate";
 import { Client } from "minio";
 import { normalizePackPath } from "@mona/minecraft-core";
@@ -43,22 +44,49 @@ export async function materializePack(files: ReadonlyMap<string, Uint8Array>, ro
 export interface ObjectStoreConfig { endpoint: string; accessKey: string; secretKey: string; bucket: string; }
 
 export class ObjectStore {
-  private readonly client: Client;
+  private readonly client: Client | null;
+  private readonly filesystemRoot: string | null;
   constructor(private readonly config: ObjectStoreConfig) {
     const endpoint = new URL(config.endpoint);
-    this.client = new Client({ endPoint: endpoint.hostname, port: endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80, useSSL: endpoint.protocol === "https:", accessKey: config.accessKey, secretKey: config.secretKey });
+    if (endpoint.protocol === "file:") {
+      this.filesystemRoot = resolve(fileURLToPath(endpoint), config.bucket);
+      this.client = null;
+    } else {
+      this.filesystemRoot = null;
+      this.client = new Client({ endPoint: endpoint.hostname, port: endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80, useSSL: endpoint.protocol === "https:", accessKey: config.accessKey, secretKey: config.secretKey });
+    }
   }
   private key(input: string): string {
     const key = input.replaceAll("\\", "/").replace(/^\/+/, "");
     if (!key || key.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("Unsafe object key");
     return key;
   }
-  async ensureBucket(): Promise<void> { if (!await this.client.bucketExists(this.config.bucket)) try { await this.client.makeBucket(this.config.bucket); } catch (error) { if (!/BucketAlready(?:OwnedByYou|Exists)/.test(String((error as { code?: string }).code ?? error))) throw error; } }
-  async put(key: string, bytes: Buffer, contentType = "application/octet-stream"): Promise<void> { await this.ensureBucket(); await this.client.putObject(this.config.bucket, this.key(key), bytes, bytes.length, { "Content-Type": contentType }); }
+  private filesystemPath(input: string): string {
+    if (!this.filesystemRoot) throw new Error("Filesystem object storage is not configured");
+    const target = resolve(this.filesystemRoot, ...this.key(input).split("/"));
+    if (!target.startsWith(`${this.filesystemRoot}${sep}`)) throw new Error("Unsafe object key");
+    return target;
+  }
+  async ensureBucket(): Promise<void> {
+    if (this.filesystemRoot) { await mkdir(this.filesystemRoot, { recursive: true }); return; }
+    if (!this.client) throw new Error("Object storage is not configured");
+    if (!await this.client.bucketExists(this.config.bucket)) try { await this.client.makeBucket(this.config.bucket); } catch (error) { if (!/BucketAlready(?:OwnedByYou|Exists)/.test(String((error as { code?: string }).code ?? error))) throw error; }
+  }
+  async put(key: string, bytes: Buffer, contentType = "application/octet-stream"): Promise<void> {
+    await this.ensureBucket();
+    if (this.filesystemRoot) {
+      const target = this.filesystemPath(key); await mkdir(dirname(target), { recursive: true });
+      const temporary = `${target}.${randomUUID()}.tmp`; await writeFile(temporary, bytes, { flag: "wx" });
+      try { await rename(temporary, target); } catch (error) { await rm(temporary, { force: true }); throw error; }
+      return;
+    }
+    await this.client!.putObject(this.config.bucket, this.key(key), bytes, bytes.length, { "Content-Type": contentType });
+  }
   async get(key: string): Promise<Buffer> {
-    const stream = await this.client.getObject(this.config.bucket, this.key(key)); const chunks: Buffer[] = [];
+    if (this.filesystemRoot) return readFile(this.filesystemPath(key));
+    const stream = await this.client!.getObject(this.config.bucket, this.key(key)); const chunks: Buffer[] = [];
     for await (const chunk of stream as Readable) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     return Buffer.concat(chunks);
   }
-  async remove(key: string): Promise<void> { await this.client.removeObject(this.config.bucket, this.key(key)); }
+  async remove(key: string): Promise<void> { if (this.filesystemRoot) { await rm(this.filesystemPath(key), { force: true }); return; } await this.client!.removeObject(this.config.bucket, this.key(key)); }
 }

@@ -1,0 +1,6 @@
+# Add this handler before the official site's catch-all `handle` block.
+@mona_resource_studio path /studio-api /studio-api/*
+handle @mona_resource_studio {
+    uri strip_prefix /studio-api
+    reverse_proxy 127.0.0.1:8810
+}

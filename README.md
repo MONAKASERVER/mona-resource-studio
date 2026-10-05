@@ -4,7 +4,7 @@ Minecraft Java Edition向けリソースパックをチームで編集・レビ�
 
 ## ダウンロード
 
-Windows版インストーラー（`.exe`）は [GitHub Releases](https://github.com/MONAKASERVER/mona-resource-studio/releases/latest) からダウンロードできます。
+Windows版インストーラー（`.exe`）は [GitHub Releases](https://github.com/MONAKASERVER/mona-resource-studio/releases/latest) からダウンロードできます。配布版の既定接続先は `https://www.monacraft.net/studio-api` です。
 
 デスクトップアプリはMona Resource Studio APIへ接続して使用します。サーバーを自分で構築する場合は、下記の「起動」と `docs/` 内の手順を参照してください。公開バイナリは現時点ではコード署名されていないため、Windows SmartScreenの確認画面が表示される場合があります。
 
@@ -65,3 +65,5 @@ npm run test:integration:review-release
 初期認証情報は `.env` の `SEED_ADMIN_*` を使用します。初回ログイン後に変更し、本番では開発用既定Secretを使用しないでください。
 
 詳細は [docs/architecture.md](docs/architecture.md)、[docs/development.md](docs/development.md)、[docs/review-release.md](docs/review-release.md)、[docs/operations.md](docs/operations.md) を参照してください。
+
+KAGOYA VPSの本番構成は [docs/vps-deployment.md](docs/vps-deployment.md) を参照してください。

@@ -1,9 +1,12 @@
 {
   "name": "mona-resource-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build:packages": "npm run build -w @mona/shared && npm run build -w @mona/minecraft-core && npm run build -w @mona/build-core && npm run build -w @mona/cit-core && npm run build -w @mona/pixel-core",
     "dev": "npm run build:packages && concurrently -k -n API,DESKTOP -c magenta,cyan \"npm:dev:api\" \"npm:dev:desktop\"",
@@ -22,5 +25,7 @@
   "devDependencies": {
     "concurrently": "^9.2.4"
   },
-  "engines": { "node": ">=24" }
+  "engines": {
+    "node": ">=24"
+  }
 }

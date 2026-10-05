@@ -11,7 +11,7 @@ import { BuildManager } from "./BuildManager.js";
 import { CollaborationManager } from "./CollaborationManager.js";
 import { ReviewManager } from "./ReviewManager.js";
 
-const API_URL = localStorage.getItem("mona-studio-api") ?? "http://localhost:4100";
+const API_URL = localStorage.getItem("mona-studio-api") ?? "https://www.monacraft.net/studio-api";
 const friendlyError = (error: unknown) => error instanceof ApiError || error instanceof Error ? error.message : "処理に失敗しました。";
 
 function Brand({ compact = false }: { compact?: boolean }) {

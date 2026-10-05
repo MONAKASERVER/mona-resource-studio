@@ -14,6 +14,7 @@ const schema = z.object({
   JWT_ACCESS_SECRET: z.string().min(24).default("development-access-secret-change-me"),
   DATA_ROOT: z.string().default(".data"),
   DESKTOP_ORIGIN: z.string().default("http://localhost:1420"),
+  TRUST_PROXY: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   SEED_ADMIN_USERNAME: z.string().min(3).default("admin"),
   SEED_ADMIN_PASSWORD: z.string().min(12).default("change-me-now"),
 });

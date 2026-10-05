@@ -22,6 +22,12 @@ export interface ReviewDetail extends ReviewRecord { events: Array<{ id: string;
 export interface ReleaseRecord { id: string; buildId: string; approvedReviewId: string; version: string; releaseNotes: string; artifactSha256: string; artifactSize: string; publishedAt: string; publishedBy: string; }
 export interface ReviewTextDiff { lines: Array<{ kind: "context" | "add" | "remove"; text: string; beforeLine: number | null; afterLine: number | null }>; truncated: boolean; }
 
+export function realtimeWebSocketUrl(baseUrl: string, projectId: string, ticket: string): URL {
+  const url = new URL(baseUrl); url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const basePath = url.pathname.replace(/\/$/, ""); url.pathname = `${basePath}/api/v1/projects/${projectId}/realtime`;
+  url.search = new URLSearchParams({ ticket }).toString(); return url;
+}
+
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number, public readonly details?: unknown) { super(message); }
 }
@@ -108,7 +114,7 @@ export class StudioApi {
   publishRelease(projectId: string, input: { buildId: string; approvedReviewId: string; version: string; releaseNotes: string }): Promise<{ id: string; version: string; artifactSha256: string; artifactSize: string }> { return this.request(`/api/v1/projects/${projectId}/releases`, { method: "POST", body: JSON.stringify(input) }); }
   async connectRealtime(projectId: string, onEvent: (event: RealtimeEvent) => void): Promise<() => void> {
     let stopped = false; let socket: WebSocket | null = null; let reconnect = 0; let heartbeat = 0;
-    const open = async () => { const { ticket } = await this.request<{ ticket: string }>(`/api/v1/projects/${projectId}/realtime-ticket`, { method: "POST" }); if (stopped) return; const url = new URL(this.baseUrl); url.protocol = url.protocol === "https:" ? "wss:" : "ws:"; url.pathname = `/api/v1/projects/${projectId}/realtime`; url.search = new URLSearchParams({ ticket }).toString(); socket = new WebSocket(url); heartbeat = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "presence.heartbeat" })); }, 25_000); socket.onmessage = (message) => { try { onEvent(JSON.parse(String(message.data)) as RealtimeEvent); } catch { /* ignore malformed frames */ } }; socket.onclose = () => { window.clearInterval(heartbeat); if (!stopped) reconnect = window.setTimeout(() => void open().catch(() => { reconnect = window.setTimeout(() => void open().catch(() => undefined), 5000); }), 1500); }; };
+    const open = async () => { const { ticket } = await this.request<{ ticket: string }>(`/api/v1/projects/${projectId}/realtime-ticket`, { method: "POST" }); if (stopped) return; const url = realtimeWebSocketUrl(this.baseUrl, projectId, ticket); socket = new WebSocket(url); heartbeat = window.setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "presence.heartbeat" })); }, 25_000); socket.onmessage = (message) => { try { onEvent(JSON.parse(String(message.data)) as RealtimeEvent); } catch { /* ignore malformed frames */ } }; socket.onclose = () => { window.clearInterval(heartbeat); if (!stopped) reconnect = window.setTimeout(() => void open().catch(() => { reconnect = window.setTimeout(() => void open().catch(() => undefined), 5000); }), 1500); }; };
     await open(); return () => { stopped = true; window.clearInterval(heartbeat); window.clearTimeout(reconnect); socket?.close(1000, "Project closed"); };
   }
   async buildArtifact(projectId: string, buildId: string): Promise<Blob> {

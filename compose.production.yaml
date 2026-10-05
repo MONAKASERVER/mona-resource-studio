@@ -1,0 +1,108 @@
+name: mona-resource-studio
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mona_resource_studio
+      POSTGRES_USER: mona
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mona -d mona_resource_studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 256m
+    cpus: 0.5
+    security_opt: ["no-new-privileges:true"]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+    cpus: 0.25
+    security_opt: ["no-new-privileges:true"]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4100
+      DATABASE_URL: postgres://mona:${POSTGRES_PASSWORD}@postgres:5432/mona_resource_studio
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: file:///data/objects
+      MINIO_ACCESS_KEY: local-volume
+      MINIO_SECRET_KEY: local-volume-secret
+      MINIO_BUCKET: mona-resource-studio
+      DATA_ROOT: /data/working
+      DESKTOP_ORIGIN: https://www.monacraft.net
+      TRUST_PROXY: "true"
+    ports:
+      - "127.0.0.1:8810:4100"
+    volumes:
+      - studio-data:/data
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 192
+    mem_limit: 384m
+    cpus: 0.75
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://mona:${POSTGRES_PASSWORD}@postgres:5432/mona_resource_studio
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: file:///data/objects
+      MINIO_ACCESS_KEY: local-volume
+      MINIO_SECRET_KEY: local-volume-secret
+      MINIO_BUCKET: mona-resource-studio
+      PACKSQUASH_BINARY: /usr/local/bin/packsquash
+      BUILD_CONCURRENCY: 1
+    volumes:
+      - studio-data:/data
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    read_only: true
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 192
+    mem_limit: 512m
+    cpus: 1.0
+
+volumes:
+  postgres-data:
+  redis-data:
+  studio-data:
