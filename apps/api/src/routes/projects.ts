@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ProjectFile, ProjectRole } from "@mona/shared";
-import { hasPngSignature, readPngDimensions } from "@mona/minecraft-core";
+import { hasPngSignature, normalizePackPath, readPngDimensions } from "@mona/minecraft-core";
 import type { Database } from "../db/pool.js";
 import { requireUser } from "../auth.js";
 import { AppError } from "../errors.js";
@@ -93,6 +93,35 @@ export async function projectRoutes(app: FastifyInstance, db: Database, storage:
     const user = await requireUser(request); const { projectId } = paramsSchema.parse(request.params); await requireProjectPermission(db, user, projectId, "file.read");
     const result = await db.query<{ path: string; size_bytes: string; mime_type: string | null; current_version: number }>("SELECT path, size_bytes, mime_type, current_version FROM project_files WHERE project_id = $1 ORDER BY path", [projectId]);
     return { tree: treeOf(result.rows), count: result.rowCount ?? 0 };
+  });
+
+  app.post("/projects/:projectId/files/create", async (request, reply) => {
+    const user = await requireUser(request); const { projectId } = paramsSchema.parse(request.params); await requireProjectPermission(db, user, projectId, "file.write");
+    let requestedPath = ""; let bytes: Buffer | null = null;
+    for await (const part of request.parts({ limits: { files: 1, fileSize: 5 * 1024 * 1024, fields: 3 } })) {
+      if (part.type === "file") { if (bytes) throw new AppError(400, "SINGLE_FILE_ONLY", "追加できるファイルは1つです。"); bytes = await part.toBuffer(); }
+      else if (part.fieldname === "path") requestedPath = String(part.value);
+    }
+    if (!bytes || !requestedPath) throw new AppError(400, "CREATE_FIELDS_REQUIRED", "追加先パスとPNGファイルが必要です。");
+    const path = normalizePackPath(requestedPath);
+    if (!path.toLowerCase().endsWith(".png")) throw new AppError(400, "CREATE_PNG_ONLY", "追加できる画像はPNGのみです。");
+    if (!hasPngSignature(bytes)) throw new AppError(400, "PNG_SIGNATURE", "PNGシグネチャを確認できません。");
+    try { readPngDimensions(bytes); } catch { throw new AppError(400, "PNG_INVALID", "PNGファイルを読み込めません。"); }
+
+    const client = await db.connect(); let written = false;
+    try {
+      await client.query("BEGIN"); await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [projectId]); await assertPathsWritable(client, projectId, [path], user.sub);
+      const existing = await client.query("SELECT 1 FROM project_files WHERE project_id = $1 AND lower(path) = lower($2)", [projectId, path]);
+      if (existing.rowCount) throw new AppError(409, "FILE_ALREADY_EXISTS", "同じパスのファイルがすでに存在します。");
+      const stored = await storage.createWorkingFile(projectId, path, bytes); written = true;
+      const created = await client.query<{ id: string }>("INSERT INTO project_files (project_id, path, size_bytes, sha256, mime_type, current_version, updated_by) VALUES ($1, $2, $3, $4, 'image/png', 1, $5) RETURNING id", [projectId, path, bytes.length, stored.sha256, user.sub]);
+      await client.query("UPDATE projects SET updated_at = now() WHERE id = $1", [projectId]);
+      await client.query("INSERT INTO activity_logs(project_id,actor_id,action,target_type,target_id,metadata,ip,user_agent) VALUES($1,$2,'file.created','file',$3,$4,$5,$6)", [projectId, user.sub, created.rows[0]!.id, JSON.stringify({ path, size: bytes.length, sha256: stored.sha256 }), request.ip, request.headers["user-agent"] ?? null]);
+      await client.query("COMMIT"); await realtime.publish(projectId, "file.created", { path, version: 1 });
+      reply.code(201); return { path, version: 1, size: bytes.length, sha256: stored.sha256, mimeType: "image/png" };
+    } catch (error) {
+      await client.query("ROLLBACK"); if (written) try { await storage.discardWorkingFile(projectId, path); } catch (rollbackError) { request.log.error({ rollbackError, projectId, path }, "failed to remove newly created file after rollback"); } throw error;
+    } finally { client.release(); }
   });
 
   app.post("/projects/:projectId/files/save", async (request) => {

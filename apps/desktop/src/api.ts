@@ -130,6 +130,7 @@ export class StudioApi {
   }
   files(projectId: string): Promise<{ tree: ProjectFile[]; count: number }> { return this.request(`/api/v1/projects/${projectId}/files`); }
   async importZip(projectId: string, file: File): Promise<ImportReport> { const form = new FormData(); form.set("file", file, file.name); return this.request(`/api/v1/projects/${projectId}/import`, { method: "POST", body: form }); }
+  async createFile(projectId: string, path: string, file: File): Promise<{ path: string; version: number; size: number; sha256: string; mimeType: string }> { const form = new FormData(); form.set("path", path); form.set("file", file, file.name); return this.request(`/api/v1/projects/${projectId}/files/create`, { method: "POST", body: form }); }
   async saveFile(projectId: string, path: string, baseVersion: number, file: Blob): Promise<{ path: string; version: number; size: number; sha256: string }> { const form = new FormData(); form.set("path", path); form.set("baseVersion", String(baseVersion)); form.set("file", file, path.split("/").pop() ?? "texture.png"); return this.request(`/api/v1/projects/${projectId}/files/save`, { method: "POST", body: form }); }
   async content(projectId: string, path: string): Promise<Blob> {
     let response = await fetch(`${this.baseUrl}/api/v1/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`, { headers: { Authorization: `Bearer ${this.accessToken}` } });
