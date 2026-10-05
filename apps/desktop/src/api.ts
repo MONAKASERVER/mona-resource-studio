@@ -53,9 +53,10 @@ export class StudioApi {
   }
 
   private async request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+    const hasBody = init.body !== undefined && init.body !== null;
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: { ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}), ...init.headers },
+      headers: { ...(hasBody && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...(this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : {}), ...init.headers },
     });
     if (response.status === 401 && retry && this.refreshToken && !["/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout"].includes(path)) {
       this.refreshRequest ??= this.refresh().finally(() => { this.refreshRequest = null; });

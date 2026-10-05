@@ -30,6 +30,14 @@ export async function createApp(config: AppConfig, db: Database) {
   await app.register(rateLimit, { max: 120, timeWindow: "1 minute", keyGenerator: (request) => request.ip });
   await app.register(multipart, { limits: { files: 1, fileSize: 100 * 1024 * 1024, fields: 4 } });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+  // v0.1.1 desktop clients incorrectly attached application/json to bodyless
+  // requests. Keep those clients compatible while newer clients omit it.
+  app.addHook("onRequest", async (request) => {
+    const contentType = request.headers["content-type"];
+    if (request.headers["content-length"] === "0" && typeof contentType === "string" && contentType.toLowerCase().startsWith("application/json")) {
+      delete request.headers["content-type"];
+    }
+  });
   app.get("/health", async () => ({ status: "ok" }));
   app.get("/ready", async () => { await db.query("SELECT 1"); return { status: "ready" }; });
   const storage = new ProjectStorage(config.DATA_ROOT);
@@ -41,6 +49,13 @@ export async function createApp(config: AppConfig, db: Database) {
     if (error instanceof AppError) { reply.code(error.statusCode).send({ error: { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) } }); return; }
     if (error instanceof ZodError) { reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "入力内容を確認してください。", details: error.issues } }); return; }
     if ((error as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") { reply.code(413).send({ error: { code: "ZIP_TOO_LARGE", message: "ZIPが100MiBを超えています。" } }); return; }
+    const clientError = error as { statusCode?: number; code?: string; message?: string };
+    const statusCode = clientError.statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      request.log.warn(error);
+      reply.code(statusCode).send({ error: { code: clientError.code ?? "BAD_REQUEST", message: statusCode === 400 ? "リクエスト内容が正しくありません。" : clientError.message ?? "リクエストを処理できませんでした。" } });
+      return;
+    }
     request.log.error(error); reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "サーバー内部でエラーが発生しました。" } });
   });
   await app.register(async (api) => { await authRoutes(api, db); await projectRoutes(api, db, storage, realtime); await itemRoutes(api, db, realtime); await citRoutes(api, db, storage, realtime); await buildRoutes(api, db, storage, builds, realtime); await collaborationRoutes(api, db, realtime); await reviewRoutes(api, db, builds, realtime); }, { prefix: "/api/v1" });

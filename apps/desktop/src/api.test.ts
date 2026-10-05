@@ -32,4 +32,17 @@ describe("StudioApi reverse proxy paths", () => {
   it("preserves the API base path for realtime WebSockets", () => {
     expect(realtimeWebSocketUrl("https://www.monacraft.net/studio-api", "project-id", "ticket-value").toString()).toBe("wss://www.monacraft.net/studio-api/api/v1/projects/project-id/realtime?ticket=ticket-value");
   });
+
+  it("does not send a JSON content type for requests without a body", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = new StudioApi("https://www.monacraft.net/studio-api", "access-token");
+    await api.deleteCategory("project-id", "category-id");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
