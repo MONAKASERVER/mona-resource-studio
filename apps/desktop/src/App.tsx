@@ -10,6 +10,7 @@ import { CitManager } from "./CitManager.js";
 import { BuildManager } from "./BuildManager.js";
 import { CollaborationManager } from "./CollaborationManager.js";
 import { ReviewManager } from "./ReviewManager.js";
+import { AutoUpdater } from "./AutoUpdater.js";
 
 const API_URL = localStorage.getItem("mona-studio-api") ?? "https://www.monacraft.net/studio-api";
 const friendlyError = (error: unknown) => error instanceof ApiError || error instanceof Error ? error.message : "処理に失敗しました。";
@@ -106,5 +107,5 @@ function Studio({ api }: { api: StudioApi }) {
 export function App() {
   const accessToken = useStudio((state) => state.accessToken); const refreshToken = useStudio((state) => state.refreshToken); const user = useStudio((state) => state.user); const project = useStudio((state) => state.activeProject);
   const api = useMemo(() => new StudioApi(API_URL, "", (nextAccess, nextRefresh) => useStudio.getState().updateTokens(nextAccess, nextRefresh)), []); useEffect(() => api.setTokens(accessToken, refreshToken), [api, accessToken, refreshToken]);
-  if (!user) return <LoginView api={api} />; if (!project) return <Dashboard api={api} />; return <Studio api={api} />;
+  return <><AutoUpdater />{!user ? <LoginView api={api} /> : !project ? <Dashboard api={api} /> : <Studio api={api} />}</>;
 }

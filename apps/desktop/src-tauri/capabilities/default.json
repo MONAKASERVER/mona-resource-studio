@@ -3,6 +3,5 @@
   "identifier": "default",
   "description": "Minimal desktop window permissions",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "updater:default", "process:allow-restart"]
 }
-

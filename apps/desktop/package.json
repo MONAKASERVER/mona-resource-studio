@@ -1,6 +1,6 @@
 {
   "name": "@mona/desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@mona/cit-core": "*",
-    "@mona/shared": "*",
     "@mona/pixel-core": "*",
+    "@mona/shared": "*",
     "@tauri-apps/api": "^2.12.1",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.1",
     "fflate": "^0.8.3",
     "lucide-react": "^0.468.0",
     "react": "^19.3.0",
