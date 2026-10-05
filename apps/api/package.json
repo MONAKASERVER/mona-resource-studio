@@ -1,0 +1,44 @@
+{
+  "name": "@mona/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run src",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.2",
+    "@fastify/multipart": "^10.1.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/websocket": "^11.3.3",
+    "@mona/build-core": "^0.1.0",
+    "@mona/cit-core": "*",
+    "@mona/minecraft-core": "*",
+    "@mona/shared": "*",
+    "argon2": "^0.45.1",
+    "bullmq": "^6.3.11",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.12.5",
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.1",
+    "ws": "^8.22.0",
+    "yauzl": "^3.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.16.0",
+    "@types/ws": "^8.18.2",
+    "@types/yauzl": "^2.10.3",
+    "fflate": "^0.8.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

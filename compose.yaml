@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mona_resource_studio
+      POSTGRES_USER: mona
+      POSTGRES_PASSWORD: mona_dev
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mona -d mona_resource_studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:8-alpine
+    ports: ["6379:6379"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  minio:
+    image: localstack/localstack:4.9.1@sha256:ef90c3d6d69e36752d0154f9bc21099fc70dfbffc99a0145a6d7d04a721a6124
+    environment:
+      SERVICES: s3
+      DEBUG: 0
+    ports: ["9000:4566"]
+    volumes: ["minio-data:/var/lib/localstack"]
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://mona:mona_dev@postgres:5432/mona_resource_studio
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:4566
+      MINIO_ACCESS_KEY: test
+      MINIO_SECRET_KEY: testtest
+      MINIO_BUCKET: mona-resource-studio
+      DATA_ROOT: /data
+    ports: ["4100:4100"]
+    volumes: ["studio-data:/data"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://mona:mona_dev@postgres:5432/mona_resource_studio
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:4566
+      MINIO_ACCESS_KEY: test
+      MINIO_SECRET_KEY: testtest
+      MINIO_BUCKET: mona-resource-studio
+      PACKSQUASH_BINARY: /usr/local/bin/packsquash
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  studio-data:

@@ -1,0 +1,22 @@
+{
+  "name": "@mona/build-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@mona/minecraft-core": "*",
+    "fflate": "^0.8.3",
+    "minio": "^8.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

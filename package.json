@@ -1,0 +1,26 @@
+{
+  "name": "mona-resource-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build:packages": "npm run build -w @mona/shared && npm run build -w @mona/minecraft-core && npm run build -w @mona/build-core && npm run build -w @mona/cit-core && npm run build -w @mona/pixel-core",
+    "dev": "npm run build:packages && concurrently -k -n API,DESKTOP -c magenta,cyan \"npm:dev:api\" \"npm:dev:desktop\"",
+    "dev:api": "npm run dev -w @mona/api",
+    "dev:desktop": "npm run dev -w @mona/desktop",
+    "dev:worker": "npm run build:packages && npm run build -w @mona/build-worker && npm run start -w @mona/build-worker",
+    "build": "npm run build:packages && npm run build -w @mona/api && npm run build -w @mona/build-worker && npm run build -w @mona/desktop",
+    "check": "npm run build && npm run test",
+    "test": "npm run build:packages && npm run test -w @mona/shared && npm run test -w @mona/minecraft-core && npm run test -w @mona/build-core && npm run test -w @mona/cit-core && npm run test -w @mona/pixel-core && npm run test -w @mona/api && npm run test -w @mona/build-worker && npm run test -w @mona/desktop",
+    "db:migrate": "npm run db:migrate -w @mona/api",
+    "db:seed": "npm run db:seed -w @mona/api",
+    "test:integration:review-release": "node scripts/integration-review-release.mjs",
+    "tauri:dev": "npm run tauri:dev -w @mona/desktop",
+    "tauri:build": "npm run tauri:build -w @mona/desktop"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4"
+  },
+  "engines": { "node": ">=24" }
+}
