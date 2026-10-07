@@ -14,6 +14,9 @@ const schema = z.object({
   JWT_ACCESS_SECRET: z.string().min(24).default("development-access-secret-change-me"),
   DATA_ROOT: z.string().default(".data"),
   DESKTOP_ORIGIN: z.string().default("http://localhost:1420"),
+  PASSKEY_RP_ID: z.string().min(1).default("localhost"),
+  PASSKEY_ORIGIN: z.string().url().default("http://localhost:4100"),
+  PASSKEY_PUBLIC_API_URL: z.string().url().default("http://localhost:4100"),
   TRUST_PROXY: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   SEED_ADMIN_USERNAME: z.string().min(3).default("admin"),
   SEED_ADMIN_PASSWORD: z.string().min(12).default("change-me-now"),
@@ -26,5 +29,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (config.NODE_ENV === "production" && config.JWT_ACCESS_SECRET.startsWith("development-")) {
     throw new Error("Production refuses development JWT secrets");
   }
+  const passkeyOrigin = new URL(config.PASSKEY_ORIGIN);
+  const publicApiUrl = new URL(config.PASSKEY_PUBLIC_API_URL);
+  if (passkeyOrigin.hostname !== config.PASSKEY_RP_ID || passkeyOrigin.origin !== config.PASSKEY_ORIGIN.replace(/\/$/, "")) {
+    throw new Error("PASSKEY_ORIGIN hostname must match PASSKEY_RP_ID");
+  }
+  if (publicApiUrl.origin !== passkeyOrigin.origin) throw new Error("PASSKEY_PUBLIC_API_URL must use PASSKEY_ORIGIN");
+  if (config.NODE_ENV === "production" && passkeyOrigin.protocol !== "https:") throw new Error("Production passkeys require HTTPS");
   return config;
 }

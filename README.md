@@ -11,6 +11,7 @@ Windows版インストーラー（`.exe`）は [GitHub Releases](https://github.
 ## 実装済みの機能
 
 - ユーザー名/パスワード認証（Argon2id、短命Access Token、ローテーションRefresh Token）
+- Windows Hello・スマートフォン・セキュリティキー対応のパスキーログイン／登録管理
 - プロジェクト作成・一覧・RBAC
 - ZIPまたはフォルダからのResource Pack Import
 - Zip Slip、容量、ファイル数、拡張子偽装、危険ファイルの検査

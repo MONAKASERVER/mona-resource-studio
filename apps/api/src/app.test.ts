@@ -48,4 +48,29 @@ describe("API shell", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: { code: "FST_ERR_CTP_INVALID_JSON_BODY" } });
   });
+
+  it("starts passkey login with the browser secret in the URL fragment", async () => {
+    const flowId = "00000000-0000-4000-8000-000000000001";
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ id: flowId }], rowCount: 1 }) } as unknown as Database;
+    const app = await createApp(loadConfig({ NODE_ENV: "test", DATA_ROOT: ".data-test" }), db); opened.push(app);
+    const response = await app.inject({ method: "POST", url: "/api/v1/auth/passkey/login/start" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ flowId: string; pollToken: string; browserUrl: string }>();
+    const browserUrl = new URL(body.browserUrl);
+    expect(body.flowId).toBe(flowId);
+    expect(body.pollToken.length).toBeGreaterThan(32);
+    expect(browserUrl.searchParams.get("flow")).toBe(flowId);
+    expect(browserUrl.searchParams.has("token")).toBe(false);
+    expect(new URLSearchParams(browserUrl.hash.slice(1)).get("token")?.length).toBeGreaterThan(32);
+  });
+
+  it("serves the passkey ceremony with restrictive browser headers", async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [{ exists: 1 }], rowCount: 1 }) } as unknown as Database;
+    const app = await createApp(loadConfig({ NODE_ENV: "test", DATA_ROOT: ".data-test" }), db); opened.push(app);
+    const response = await app.inject({ method: "GET", url: "/api/v1/auth/passkey/ceremony?flow=00000000-0000-4000-8000-000000000001" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(response.headers["referrer-policy"]).toBe("no-referrer");
+    expect(response.body).toContain("パスキー認証");
+  });
 });

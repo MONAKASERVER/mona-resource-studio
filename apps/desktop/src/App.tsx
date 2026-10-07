@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Archive, Box, ChevronDown, ChevronRight, CircleUserRound, File, FileCode2, FileImage, Folder, FolderOpen, GitPullRequest, Hammer, Import, Layers3, LogOut, PackageOpen, Plus, Search, Settings2, ShieldCheck, Sparkles, Upload, Users, X } from "lucide-react";
+import { AlertCircle, Archive, Box, ChevronDown, ChevronRight, CircleUserRound, File, FileCode2, FileImage, Fingerprint, Folder, FolderOpen, GitPullRequest, Hammer, Import, KeyRound, Layers3, LogOut, PackageOpen, Plus, Search, Settings2, ShieldCheck, Sparkles, Trash2, Upload, Users, X } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ImportReport, ProjectFile, ProjectSummary } from "@mona/shared";
-import { ApiError, StudioApi } from "./api.js";
+import { ApiError, type PasskeyFlow, type PasskeyPollResponse, type PasskeyRecord, type SessionResponse, StudioApi } from "./api.js";
 import { folderFilesToZip } from "./folderZip.js";
 import { useStudio } from "./store.js";
 import { LockedPixelEditor } from "./LockedPixelEditor.js";
@@ -14,6 +15,18 @@ import { AutoUpdater } from "./AutoUpdater.js";
 
 const API_URL = localStorage.getItem("mona-studio-api") ?? "https://www.monacraft.net/studio-api";
 const friendlyError = (error: unknown) => error instanceof ApiError || error instanceof Error ? error.message : "処理に失敗しました。";
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+async function openPasskeyPage(url: string): Promise<void> {
+  try { await openUrl(url); }
+  catch { const opened = window.open(url, "_blank", "noopener,noreferrer"); if (!opened) throw new Error("ブラウザを開けませんでした。ポップアップ設定を確認してください。"); }
+}
+
+async function pollPasskey(api: StudioApi, flow: PasskeyFlow): Promise<PasskeyPollResponse> {
+  const deadline = Date.now() + flow.expiresIn * 1000;
+  while (Date.now() < deadline) { await wait(900); const result = await api.pollPasskey(flow); if (!("status" in result) || result.status === "complete") return result; }
+  throw new Error("パスキー認証が時間切れになりました。");
+}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return <div className={`brand ${compact ? "compact" : ""}`}><div className="brand-mark"><Layers3 size={22} /></div>{!compact && <div><strong>Mona Resource Studio</strong><span>RESOURCE PACK WORKSPACE</span></div>}</div>;
@@ -22,6 +35,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 function LoginView({ api }: { api: StudioApi }) {
   const setSession = useStudio((state) => state.setSession); const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [server, setServer] = useState(API_URL); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { localStorage.setItem("mona-studio-api", server.replace(/\/$/, "")); api.baseUrl = server.replace(/\/$/, ""); const session = await api.login(username, password); api.setTokens(session.accessToken, session.refreshToken); setSession(session.user, session.accessToken, session.refreshToken); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
+  const passkeyLogin = async () => { setBusy(true); setError(""); try { localStorage.setItem("mona-studio-api", server.replace(/\/$/, "")); api.baseUrl = server.replace(/\/$/, ""); const flow = await api.startPasskeyLogin(); await openPasskeyPage(flow.browserUrl); const result = await pollPasskey(api, flow); if (!("accessToken" in result)) throw new Error("ログイン結果を受け取れませんでした。"); const session = result as SessionResponse; api.setTokens(session.accessToken, session.refreshToken); setSession(session.user, session.accessToken, session.refreshToken); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
   return <main className="login-page">
     <section className="login-art"><Brand /><div className="login-copy"><span className="eyebrow"><Sparkles size={14} /> TEAM AUTHORING</span><h1>ひとつのパックを、<br />ひとつのチームで。</h1><p>テクスチャ、モデル、CIT、レビュー、ビルドを安全なワークスペースへ統合します。</p></div><div className="login-grid" aria-hidden="true" /></section>
     <section className="login-panel"><form className="login-card" onSubmit={submit}><div className="card-icon"><ShieldCheck /></div><h2>ワークスペースへログイン</h2><p>管理者から発行されたアカウントを使用してください。</p>
@@ -29,20 +43,29 @@ function LoginView({ api }: { api: StudioApi }) {
       <label>パスワード<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required /></label>
       <details><summary>接続先サーバー</summary><label>API URL<input value={server} onChange={(e) => setServer(e.target.value)} type="url" required /></label></details>
       {error && <div className="inline-error" role="alert"><AlertCircle size={16} />{error}</div>}
-      <button className="primary wide" disabled={busy}>{busy ? "接続しています…" : "ログイン"}</button><small>認証情報はこの端末へ平文保存されません。</small>
+      <button className="primary wide" disabled={busy}>{busy ? "接続しています…" : "ログイン"}</button><div className="login-divider"><span>または</span></div><button type="button" className="secondary wide passkey-button" disabled={busy} onClick={() => void passkeyLogin()}><Fingerprint />パスキーでログイン</button><small>認証情報はこの端末へ平文保存されません。</small>
     </form></section>
   </main>;
 }
 
 function Dashboard({ api }: { api: StudioApi }) {
-  const user = useStudio((s) => s.user)!; const setProject = useStudio((s) => s.setProject); const logout = useStudio((s) => s.logout); const [projects, setProjects] = useState<ProjectSummary[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [showCreate, setShowCreate] = useState(false);
+  const user = useStudio((s) => s.user)!; const setProject = useStudio((s) => s.setProject); const logout = useStudio((s) => s.logout); const [projects, setProjects] = useState<ProjectSummary[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [showCreate, setShowCreate] = useState(false); const [showSecurity, setShowSecurity] = useState(false);
   const load = async () => { setLoading(true); setError(""); try { setProjects(await api.listProjects()); } catch (reason) { setError(friendlyError(reason)); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, []);
-  return <main className="dashboard"><header className="topbar"><Brand /><div className="user-chip"><CircleUserRound size={18} /><span>{user.displayName}<small>@{user.username}</small></span><button aria-label="ログアウト" onClick={() => void api.logout().catch(() => undefined).finally(logout)}><LogOut size={17} /></button></div></header>
+  return <main className="dashboard"><header className="topbar"><Brand /><div className="user-chip"><CircleUserRound size={18} /><span>{user.displayName}<small>@{user.username}</small></span><button aria-label="アカウント設定" title="アカウント設定" onClick={() => setShowSecurity(true)}><KeyRound size={17} /></button><button aria-label="ログアウト" title="ログアウト" onClick={() => void api.logout().catch(() => undefined).finally(logout)}><LogOut size={17} /></button></div></header>
     <section className="dashboard-body"><div className="page-heading"><div><span className="eyebrow">WORKSPACES</span><h1>プロジェクト</h1><p>参加しているResource Packワークスペースを選択します。</p></div><button className="primary" onClick={() => setShowCreate(true)}><Plus size={17} />新規プロジェクト</button></div>
       {error && <div className="banner error"><AlertCircle size={18} />{error}<button onClick={() => void load()}>再試行</button></div>}
       <div className="project-grid">{loading ? <div className="empty-state">プロジェクトを読み込んでいます…</div> : projects.length === 0 ? <div className="empty-state"><PackageOpen size={38} /><h3>最初のプロジェクトを作成</h3><p>新規プロジェクトを作り、Resource PackをImportしてください。</p></div> : projects.map((project) => <button key={project.id} className="project-card" onClick={() => setProject(project)}><div className="project-icon"><Box /></div><div className="project-meta"><div><span className={`role role-${project.role}`}>{project.role}</span><span>MC {project.minecraftVersion}</span></div><h2>{project.name}</h2><p>{project.description || "説明はまだありません。"}</p><footer><span>{project.fileCount} files</span><span>{new Date(project.updatedAt).toLocaleString("ja-JP")}</span></footer></div></button>)}</div>
-    </section>{showCreate && <CreateProject api={api} onClose={() => setShowCreate(false)} onCreated={(project) => { setProjects((items) => [project, ...items]); setShowCreate(false); setProject(project); }} />}</main>;
+    </section>{showCreate && <CreateProject api={api} onClose={() => setShowCreate(false)} onCreated={(project) => { setProjects((items) => [project, ...items]); setShowCreate(false); setProject(project); }} />}{showSecurity && <AccountSecurity api={api} onClose={() => setShowSecurity(false)} />}</main>;
+}
+
+function AccountSecurity({ api, onClose }: { api: StudioApi; onClose: () => void }) {
+  const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]); const [name, setName] = useState("この端末"); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const load = async () => { try { setPasskeys(await api.listPasskeys()); } catch (reason) { setError(friendlyError(reason)); } };
+  useEffect(() => { void load(); }, []);
+  const register = async () => { setBusy(true); setError(""); try { const flow = await api.startPasskeyRegistration(name.trim() || "マイパスキー"); await openPasskeyPage(flow.browserUrl); const result = await pollPasskey(api, flow); if (!("status" in result) || result.status !== "complete") throw new Error("登録結果を受け取れませんでした。"); await load(); setName("この端末"); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
+  const remove = async (passkey: PasskeyRecord) => { if (!window.confirm(`「${passkey.name}」を削除しますか？`)) return; setBusy(true); setError(""); try { await api.deletePasskey(passkey.id); await load(); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}><section className="modal security-modal" role="dialog" aria-modal="true" aria-label="アカウントのセキュリティ"><header><div><span className="eyebrow">ACCOUNT SECURITY</span><h2>パスキー</h2></div><button type="button" className="icon-button" disabled={busy} onClick={onClose}><X /></button></header><p className="security-copy">Windows Hello、スマートフォン、セキュリティキーを登録すると、次回からパスワードなしでログインできます。</p><div className="passkey-register"><input value={name} onChange={(event) => setName(event.target.value)} maxLength={64} placeholder="パスキー名" /><button type="button" className="primary" disabled={busy || !name.trim()} onClick={() => void register()}><Fingerprint />{busy ? "処理中…" : "新しいパスキーを登録"}</button></div>{error && <div className="inline-error"><AlertCircle size={16} />{error}</div>}<div className="passkey-list">{passkeys.length === 0 ? <div className="passkey-empty"><KeyRound /><span>登録済みのパスキーはありません。</span></div> : passkeys.map((passkey) => <article key={passkey.id}><div className="passkey-icon"><Fingerprint /></div><span><strong>{passkey.name}</strong><small>{passkey.backedUp ? "同期可能なパスキー" : "この端末またはセキュリティキー"} · 登録 {new Date(passkey.createdAt).toLocaleDateString("ja-JP")}{passkey.lastUsedAt ? ` · 最終使用 ${new Date(passkey.lastUsedAt).toLocaleDateString("ja-JP")}` : ""}</small></span><button type="button" title="削除" disabled={busy} onClick={() => void remove(passkey)}><Trash2 /></button></article>)}</div><footer><button type="button" className="secondary" disabled={busy} onClick={onClose}>閉じる</button></footer></section></div>;
 }
 
 function CreateProject({ api, onClose, onCreated }: { api: StudioApi; onClose: () => void; onCreated: (project: ProjectSummary) => void }) {

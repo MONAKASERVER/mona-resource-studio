@@ -3,6 +3,9 @@ import type { CitRule } from "@mona/cit-core";
 import type { StudioProblem } from "@mona/shared";
 
 export interface SessionResponse { accessToken: string; refreshToken: string; expiresIn: number; user: SessionUser; }
+export interface PasskeyFlow { flowId: string; pollToken: string; browserUrl: string; expiresIn: number; }
+export interface PasskeyRecord { id: string; name: string; deviceType: "singleDevice" | "multiDevice"; backedUp: boolean; createdAt: string; lastUsedAt: string | null; }
+export type PasskeyPollResponse = { status: "pending" | "complete" } | SessionResponse;
 interface TokenResponse { accessToken: string; refreshToken: string; expiresIn: number; }
 export interface ItemCategory { id: string; parentId: string | null; name: string; sortOrder: number; }
 export interface LogicalItem { id: string; logicalId: string; displayName: string; baseItemId: string; categoryId: string | null; categoryName?: string | null; textureRef: string | null; modelRef: string | null; updatedAt: string; }
@@ -72,6 +75,11 @@ export class StudioApi {
   }
 
   login(username: string, password: string): Promise<SessionResponse> { return this.request("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }); }
+  startPasskeyLogin(): Promise<PasskeyFlow> { return this.request("/api/v1/auth/passkey/login/start", { method: "POST" }); }
+  startPasskeyRegistration(name: string): Promise<PasskeyFlow> { return this.request("/api/v1/auth/passkey/register/start", { method: "POST", body: JSON.stringify({ name }) }); }
+  pollPasskey(flow: PasskeyFlow): Promise<PasskeyPollResponse> { return this.request("/api/v1/auth/passkey/poll", { method: "POST", body: JSON.stringify({ flowId: flow.flowId, token: flow.pollToken }) }); }
+  listPasskeys(): Promise<PasskeyRecord[]> { return this.request("/api/v1/auth/passkeys"); }
+  deletePasskey(id: string): Promise<void> { return this.request(`/api/v1/auth/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" }); }
   logout(): Promise<void> { return this.request("/api/v1/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken: this.refreshToken }) }, false); }
   listProjects(): Promise<ProjectSummary[]> { return this.request("/api/v1/projects"); }
   createProject(input: { name: string; description: string; minecraftVersion: string }): Promise<ProjectSummary> { return this.request("/api/v1/projects", { method: "POST", body: JSON.stringify(input) }); }

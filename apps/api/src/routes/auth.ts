@@ -1,14 +1,17 @@
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { AppConfig } from "../config.js";
 import type { Database } from "../db/pool.js";
 import { createSession, hashToken, requireUser } from "../auth.js";
 import { AppError } from "../errors.js";
+import { passkeyRoutes } from "./passkeys.js";
 
 const loginSchema = z.object({ username: z.string().min(3).max(32), password: z.string().min(1).max(512) });
 const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) });
 
-export async function authRoutes(app: FastifyInstance, db: Database): Promise<void> {
+export async function authRoutes(app: FastifyInstance, db: Database, config: AppConfig): Promise<void> {
+  await passkeyRoutes(app, db, config);
   app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request) => {
     const body = loginSchema.parse(request.body);
     const result = await db.query<{ id: string; username: string; display_name: string; password_hash: string; system_role: "admin" | "user" }>(

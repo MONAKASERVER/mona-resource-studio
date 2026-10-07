@@ -6,6 +6,10 @@
 - Access Tokenは15分、Refresh Tokenは30日。refreshはローテーションし、DBにはSHA-256だけを保存する。
 - DesktopはPhase 1ではtokenをメモリ保持し、平文の永続保存をしない。永続ログインはTauri Stronghold導入後に有効化する。
 - 本番起動時は開発用JWT secretを拒否する。
+- パスキーはWebAuthnのdiscoverable credentialとして登録し、ユーザー検証を必須にする。
+- WebAuthn ceremonyは`PASSKEY_ORIGIN`と`PASSKEY_RP_ID`を厳密に検証する。challengeとアプリ引き渡しtokenは5分で失効し、一度しか使用できない。
+- デスクトップアプリは公式HTTPSドメインの認証ページを既定ブラウザで開く。browser tokenはURL fragmentへ置き、HTTP request・proxy access log・Refererへ送信しない。
+- credentialの秘密鍵は端末側の認証器から出ない。サーバーには公開鍵、signature counter、transport、backup状態だけを保存する。
 
 ## RBAC
 
@@ -21,4 +25,3 @@
 ## Build Worker
 
 コンテナ/低権限ユーザーで動かし、networkを既定拒否、CPU・memory・wall time・log bytesを制限する。PackSquashの引数をshell文字列連結せず、固定されたargvとして渡す。
-

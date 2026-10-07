@@ -35,6 +35,37 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS refresh_tokens_active_idx ON refresh_tokens(user_id, expires_at) WHERE revoked_at IS NULL;
 
+CREATE TABLE IF NOT EXISTS passkey_credentials (
+  id TEXT PRIMARY KEY CHECK (char_length(id) BETWEEN 16 AND 2048),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 64),
+  public_key BYTEA NOT NULL,
+  counter BIGINT NOT NULL DEFAULT 0 CHECK (counter >= 0),
+  transports TEXT[] NOT NULL DEFAULT '{}',
+  device_type TEXT NOT NULL CHECK (device_type IN ('singleDevice', 'multiDevice')),
+  backed_up BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS passkey_credentials_user_idx ON passkey_credentials(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS passkey_flows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind TEXT NOT NULL CHECK (kind IN ('login', 'register')),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  challenge TEXT NOT NULL,
+  options JSONB NOT NULL,
+  credential_name TEXT,
+  browser_token_hash CHAR(64) NOT NULL,
+  poll_token_hash CHAR(64) NOT NULL,
+  attempted_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  consumed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS passkey_flows_expiry_idx ON passkey_flows(expires_at);
+
 CREATE TABLE IF NOT EXISTS projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),

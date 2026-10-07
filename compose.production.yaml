@@ -52,6 +52,9 @@ services:
       MINIO_BUCKET: mona-resource-studio
       DATA_ROOT: /data/working
       DESKTOP_ORIGIN: https://www.monacraft.net
+      PASSKEY_RP_ID: www.monacraft.net
+      PASSKEY_ORIGIN: https://www.monacraft.net
+      PASSKEY_PUBLIC_API_URL: https://www.monacraft.net/studio-api
       TRUST_PROXY: "true"
     ports:
       - "127.0.0.1:8810:4100"

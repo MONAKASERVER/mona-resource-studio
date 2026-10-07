@@ -58,6 +58,6 @@ export async function createApp(config: AppConfig, db: Database) {
     }
     request.log.error(error); reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "サーバー内部でエラーが発生しました。" } });
   });
-  await app.register(async (api) => { await authRoutes(api, db); await projectRoutes(api, db, storage, realtime); await itemRoutes(api, db, realtime); await citRoutes(api, db, storage, realtime); await buildRoutes(api, db, storage, builds, realtime); await collaborationRoutes(api, db, realtime); await reviewRoutes(api, db, builds, realtime); }, { prefix: "/api/v1" });
+  await app.register(async (api) => { await authRoutes(api, db, config); await projectRoutes(api, db, storage, realtime); await itemRoutes(api, db, realtime); await citRoutes(api, db, storage, realtime); await buildRoutes(api, db, storage, builds, realtime); await collaborationRoutes(api, db, realtime); await reviewRoutes(api, db, builds, realtime); }, { prefix: "/api/v1" });
   return app;
 }
