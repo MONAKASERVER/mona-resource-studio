@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Minimal desktop window permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:allow-open-url", "updater:default", "process:allow-restart"]
+  "permissions": ["core:default", "opener:allow-open-url", "opener:allow-default-urls", "updater:default", "process:allow-restart"]
 }

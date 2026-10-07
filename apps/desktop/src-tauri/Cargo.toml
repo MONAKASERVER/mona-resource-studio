@@ -1,6 +1,6 @@
 [package]
 name = "mona-resource-studio"
-version = "0.1.7"
+version = "0.1.8"
 description = "Collaborative Minecraft resource pack IDE"
 authors = ["MONAKA SERVER"]
 edition = "2021"
