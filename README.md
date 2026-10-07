@@ -6,6 +6,8 @@ Minecraft Java Edition向けリソースパックをチームで編集・レビ�
 
 Windows版インストーラー（`.exe`）は [GitHub Releases](https://github.com/MONAKASERVER/mona-resource-studio/releases/latest) からダウンロードできます。配布版の既定接続先は `https://www.monacraft.net/studio-api` です。
 
+更新内容は[パッチノート](パッチノート.md)で確認できます。
+
 デスクトップアプリはMona Resource Studio APIへ接続して使用します。サーバーを自分で構築する場合は、下記の「起動」と `docs/` 内の手順を参照してください。公開バイナリは現時点ではコード署名されていないため、Windows SmartScreenの確認画面が表示される場合があります。
 
 ## 実装済みの機能
