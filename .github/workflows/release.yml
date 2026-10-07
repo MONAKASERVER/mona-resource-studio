@@ -46,24 +46,22 @@ jobs:
           $out = ".release"
           New-Item -ItemType Directory -Force $out | Out-Null
           $installer = Get-ChildItem "$bundle/*.exe" | Select-Object -First 1
-          $updater = Get-ChildItem "$bundle/*.nsis.zip" | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not generated." }
-          if (-not $updater -or -not (Test-Path "$($updater.FullName).sig")) { throw "Signed NSIS updater bundle was not generated." }
-          Copy-Item $installer.FullName "$out/$($installer.Name)"
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)" | Set-Content -Encoding ascii "$out/$($installer.Name).sha256"
+          if (-not (Test-Path "$($installer.FullName).sig")) { throw "Signed NSIS updater installer was not generated." }
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
-          $updaterName = "Mona.Resource.Studio_${version}_x64.nsis.zip"
-          Copy-Item $updater.FullName "$out/$updaterName"
-          Copy-Item "$($updater.FullName).sig" "$out/$updaterName.sig"
+          $installerName = "Mona.Resource.Studio_${version}_x64-setup.exe"
+          Copy-Item $installer.FullName "$out/$installerName"
+          Copy-Item "$($installer.FullName).sig" "$out/$installerName.sig"
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $installerName" | Set-Content -Encoding ascii "$out/$installerName.sha256"
           $manifest = [ordered]@{
             version = $version
             notes = "Mona Resource Studio $($env:GITHUB_REF_NAME)"
             pub_date = (Get-Date).ToUniversalTime().ToString("o")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
-                signature = (Get-Content "$($updater.FullName).sig" -Raw).Trim()
-                url = "https://github.com/$($env:GITHUB_REPOSITORY)/releases/download/$($env:GITHUB_REF_NAME)/$updaterName"
+                signature = (Get-Content "$($installer.FullName).sig" -Raw).Trim()
+                url = "https://github.com/$($env:GITHUB_REPOSITORY)/releases/download/$($env:GITHUB_REF_NAME)/$installerName"
               }
             }
           }
@@ -79,7 +77,7 @@ jobs:
 
             - `.exe`: NSISインストーラー
             - `.sha256`: SHA-256チェックサム
-            - `latest.json` / `.nsis.zip`: アプリ内自動更新用の署名済みデータ
+            - `latest.json` / `.exe.sig`: アプリ内自動更新用の署名済みデータ
             - 現在の配布バイナリは未署名です。Windows SmartScreenが表示された場合は、発行元とチェックサムを確認してください。
           files: |
             .release/*
