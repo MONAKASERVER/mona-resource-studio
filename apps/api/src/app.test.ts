@@ -73,4 +73,13 @@ describe("API shell", () => {
     expect(response.headers["referrer-policy"]).toBe("no-referrer");
     expect(response.body).toContain("パスキー認証");
   });
+
+  it("advertises passkey support without touching the database", async () => {
+    const db = { query: vi.fn() } as unknown as Database;
+    const app = await createApp(loadConfig({ NODE_ENV: "test", DATA_ROOT: ".data-test" }), db); opened.push(app);
+    const response = await app.inject({ method: "GET", url: "/api/v1/auth/passkey/status" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ enabled: true, rpId: "localhost" });
+    expect(db.query).not.toHaveBeenCalled();
+  });
 });

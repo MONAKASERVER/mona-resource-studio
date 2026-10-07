@@ -75,6 +75,8 @@ async function readFlow(db: Database, body: z.infer<typeof flowSchema>): Promise
 }
 
 export async function passkeyRoutes(app: FastifyInstance, db: Database, config: AppConfig): Promise<void> {
+  app.get("/auth/passkey/status", async () => ({ enabled: true, rpId: config.PASSKEY_RP_ID }));
+
   app.post("/auth/passkey/login/start", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async () => {
     const options = await generateAuthenticationOptions({ rpID: config.PASSKEY_RP_ID, userVerification: "required", allowCredentials: [], timeout: 120_000 });
     const browserToken = newToken(); const pollToken = newToken();

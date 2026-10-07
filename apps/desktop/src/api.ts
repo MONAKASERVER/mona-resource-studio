@@ -75,6 +75,7 @@ export class StudioApi {
   }
 
   login(username: string, password: string): Promise<SessionResponse> { return this.request("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }); }
+  passkeyStatus(): Promise<{ enabled: boolean; rpId: string }> { return this.request("/api/v1/auth/passkey/status"); }
   startPasskeyLogin(): Promise<PasskeyFlow> { return this.request("/api/v1/auth/passkey/login/start", { method: "POST" }); }
   startPasskeyRegistration(name: string): Promise<PasskeyFlow> { return this.request("/api/v1/auth/passkey/register/start", { method: "POST", body: JSON.stringify({ name }) }); }
   pollPasskey(flow: PasskeyFlow): Promise<PasskeyPollResponse> { return this.request("/api/v1/auth/passkey/poll", { method: "POST", body: JSON.stringify({ flowId: flow.flowId, token: flow.pollToken }) }); }

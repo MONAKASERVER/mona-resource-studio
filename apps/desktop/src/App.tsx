@@ -33,7 +33,8 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 function LoginView({ api }: { api: StudioApi }) {
-  const setSession = useStudio((state) => state.setSession); const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [server, setServer] = useState(API_URL); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const setSession = useStudio((state) => state.setSession); const [username, setUsername] = useState(""); const [password, setPassword] = useState(""); const [server, setServer] = useState(API_URL); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  useEffect(() => { const timer = window.setTimeout(() => { api.baseUrl = server.replace(/\/$/, ""); void api.passkeyStatus().then((status) => setPasskeyAvailable(status.enabled)).catch(() => setPasskeyAvailable(false)); }, 350); return () => window.clearTimeout(timer); }, [api, server]);
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { localStorage.setItem("mona-studio-api", server.replace(/\/$/, "")); api.baseUrl = server.replace(/\/$/, ""); const session = await api.login(username, password); api.setTokens(session.accessToken, session.refreshToken); setSession(session.user, session.accessToken, session.refreshToken); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
   const passkeyLogin = async () => { setBusy(true); setError(""); try { localStorage.setItem("mona-studio-api", server.replace(/\/$/, "")); api.baseUrl = server.replace(/\/$/, ""); const flow = await api.startPasskeyLogin(); await openPasskeyPage(flow.browserUrl); const result = await pollPasskey(api, flow); if (!("accessToken" in result)) throw new Error("ログイン結果を受け取れませんでした。"); const session = result as SessionResponse; api.setTokens(session.accessToken, session.refreshToken); setSession(session.user, session.accessToken, session.refreshToken); } catch (reason) { setError(friendlyError(reason)); } finally { setBusy(false); } };
   return <main className="login-page">
@@ -43,7 +44,7 @@ function LoginView({ api }: { api: StudioApi }) {
       <label>パスワード<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••••••" required /></label>
       <details><summary>接続先サーバー</summary><label>API URL<input value={server} onChange={(e) => setServer(e.target.value)} type="url" required /></label></details>
       {error && <div className="inline-error" role="alert"><AlertCircle size={16} />{error}</div>}
-      <button className="primary wide" disabled={busy}>{busy ? "接続しています…" : "ログイン"}</button><div className="login-divider"><span>または</span></div><button type="button" className="secondary wide passkey-button" disabled={busy} onClick={() => void passkeyLogin()}><Fingerprint />パスキーでログイン</button><small>認証情報はこの端末へ平文保存されません。</small>
+      <button className="primary wide" disabled={busy}>{busy ? "接続しています…" : "ログイン"}</button>{passkeyAvailable && <><div className="login-divider"><span>または</span></div><button type="button" className="secondary wide passkey-button" disabled={busy} onClick={() => void passkeyLogin()}><Fingerprint />パスキーでログイン</button></>}<small>認証情報はこの端末へ平文保存されません。</small>
     </form></section>
   </main>;
 }
