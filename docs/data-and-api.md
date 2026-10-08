@@ -1,5 +1,12 @@
 # DB・API・ファイルモデル
 
+## アカウント
+
+- `GET /api/v1/auth/me`: 現在のアカウント情報を取得
+- `PATCH /api/v1/auth/profile`: 固定ニックネーム（表示名）を更新
+- `POST /api/v1/auth/password`: 現在のパスワードを確認して変更し、既存セッションを失効
+- `GET/DELETE /api/v1/auth/passkeys`: 登録済みパスキーの確認・削除
+
 ## 主要テーブル
 
 - users / refresh_tokens

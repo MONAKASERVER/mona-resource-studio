@@ -20,7 +20,7 @@ import { BuildServices } from "./services/builds.js";
 import { RealtimeHub } from "./services/realtime.js";
 
 export async function createApp(config: AppConfig, db: Database) {
-  const app = Fastify({ trustProxy: config.TRUST_PROXY, logger: { level: config.NODE_ENV === "test" ? "silent" : "info", redact: ["req.headers.authorization", "req.body.password", "req.body.refreshToken", "req.body.token", "req.query.ticket"] }, bodyLimit: 2 * 1024 * 1024 });
+  const app = Fastify({ trustProxy: config.TRUST_PROXY, logger: { level: config.NODE_ENV === "test" ? "silent" : "info", redact: ["req.headers.authorization", "req.body.password", "req.body.currentPassword", "req.body.newPassword", "req.body.refreshToken", "req.body.token", "req.query.ticket"] }, bodyLimit: 2 * 1024 * 1024 });
   await app.register(cors, {
     origin: [config.DESKTOP_ORIGIN, "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"],
     credentials: false,

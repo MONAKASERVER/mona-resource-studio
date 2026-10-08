@@ -8,6 +8,7 @@ interface StudioState {
   activeProject: ProjectSummary | null;
   problems: StudioProblem[];
   setSession: (user: SessionUser, accessToken: string, refreshToken: string) => void;
+  updateUser: (user: SessionUser) => void;
   updateTokens: (accessToken: string, refreshToken: string) => void;
   setProject: (project: ProjectSummary | null) => void;
   setProblems: (problems: StudioProblem[]) => void;
@@ -17,6 +18,7 @@ interface StudioState {
 export const useStudio = create<StudioState>((set) => ({
   user: null, accessToken: "", refreshToken: "", activeProject: null, problems: [],
   setSession: (user, accessToken, refreshToken) => set({ user, accessToken, refreshToken }),
+  updateUser: (user) => set({ user }),
   updateTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
   setProject: (activeProject) => set({ activeProject, problems: [] }),
   setProblems: (problems) => set({ problems }),

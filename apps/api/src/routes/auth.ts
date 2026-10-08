@@ -9,6 +9,11 @@ import { passkeyRoutes } from "./passkeys.js";
 
 const loginSchema = z.object({ username: z.string().min(3).max(32), password: z.string().min(1).max(512) });
 const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) });
+const profileSchema = z.object({ displayName: z.string().trim().min(1).max(64) });
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1).max(512),
+  newPassword: z.string().min(12).max(128),
+});
 
 export async function authRoutes(app: FastifyInstance, db: Database, config: AppConfig): Promise<void> {
   await passkeyRoutes(app, db, config);
@@ -50,5 +55,57 @@ export async function authRoutes(app: FastifyInstance, db: Database, config: App
     const result = await db.query<{ id: string; username: string; display_name: string; system_role: "admin" | "user" }>("SELECT id, username, display_name, system_role FROM users WHERE id = $1 AND disabled_at IS NULL", [token.sub]);
     const user = result.rows[0]; if (!user) throw new AppError(401, "USER_DISABLED", "ユーザーを利用できません。");
     return { id: user.id, username: user.username, displayName: user.display_name, systemRole: user.system_role };
+  });
+
+  app.patch("/auth/profile", async (request) => {
+    const token = await requireUser(request);
+    const body = profileSchema.parse(request.body);
+    const result = await db.query<{ id: string; username: string; display_name: string; system_role: "admin" | "user" }>(
+      `UPDATE users SET display_name = $2, updated_at = now()
+       WHERE id = $1 AND disabled_at IS NULL
+       RETURNING id, username, display_name, system_role`,
+      [token.sub, body.displayName],
+    );
+    const user = result.rows[0];
+    if (!user) throw new AppError(401, "USER_DISABLED", "ユーザーを利用できません。");
+    await db.query(
+      "INSERT INTO activity_logs (actor_id, action, target_type, target_id, metadata, ip, user_agent) VALUES ($1::uuid, 'auth.profile.updated', 'user', ($1::uuid)::text, $2, $3, $4)",
+      [user.id, JSON.stringify({ displayName: user.display_name }), request.ip, request.headers["user-agent"] ?? null],
+    );
+    return { id: user.id, username: user.username, displayName: user.display_name, systemRole: user.system_role };
+  });
+
+  app.post("/auth/password", { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } }, async (request) => {
+    const token = await requireUser(request);
+    const body = passwordSchema.parse(request.body);
+    if (body.currentPassword === body.newPassword) throw new AppError(400, "PASSWORD_UNCHANGED", "現在と異なるパスワードを設定してください。");
+
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ id: string; username: string; display_name: string; password_hash: string; system_role: "admin" | "user" }>(
+        "SELECT id, username, display_name, password_hash, system_role FROM users WHERE id = $1 AND disabled_at IS NULL FOR UPDATE",
+        [token.sub],
+      );
+      const user = result.rows[0];
+      if (!user) throw new AppError(401, "USER_DISABLED", "ユーザーを利用できません。");
+      if (!await argon2.verify(user.password_hash, body.currentPassword)) throw new AppError(400, "CURRENT_PASSWORD_INVALID", "現在のパスワードが違います。");
+
+      const passwordHash = await argon2.hash(body.newPassword, { type: argon2.argon2id, memoryCost: 65_536, timeCost: 3, parallelism: 1 });
+      await client.query("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1", [user.id, passwordHash]);
+      await client.query("UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [user.id]);
+      const session = await createSession(app, client, user);
+      await client.query(
+        "INSERT INTO activity_logs (actor_id, action, target_type, target_id, ip, user_agent) VALUES ($1::uuid, 'auth.password.changed', 'user', ($1::uuid)::text, $2, $3)",
+        [user.id, request.ip, request.headers["user-agent"] ?? null],
+      );
+      await client.query("COMMIT");
+      return { ...session, user: { id: user.id, username: user.username, displayName: user.display_name, systemRole: user.system_role } };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   });
 }

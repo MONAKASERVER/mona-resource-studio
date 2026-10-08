@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import argon2 from "argon2";
 import type { Database } from "./db/pool.js";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -81,5 +82,41 @@ describe("API shell", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ enabled: true, rpId: "localhost" });
     expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it("updates the authenticated user's display name", async () => {
+    const user = { id: "00000000-0000-4000-8000-000000000010", username: "tester", display_name: "新しい表示名", system_role: "user" as const };
+    const query = vi.fn(async (sql: string) => sql.startsWith("UPDATE users") ? { rows: [user], rowCount: 1 } : { rows: [], rowCount: 1 });
+    const db = { query } as unknown as Database;
+    const app = await createApp(loadConfig({ NODE_ENV: "test", DATA_ROOT: ".data-test" }), db); opened.push(app);
+    const token = app.jwt.sign({ sub: user.id, username: user.username, systemRole: user.system_role });
+    const response = await app.inject({ method: "PATCH", url: "/api/v1/auth/profile", headers: { authorization: `Bearer ${token}` }, payload: { displayName: "  新しい表示名  " } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: user.id, username: user.username, displayName: "新しい表示名", systemRole: "user" });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("UPDATE users"), [user.id, "新しい表示名"]);
+  });
+
+  it("changes the password and replaces all existing refresh sessions", async () => {
+    const user = { id: "00000000-0000-4000-8000-000000000011", username: "tester", display_name: "Tester", password_hash: await argon2.hash("current-password"), system_role: "user" as const };
+    let storedHash = "";
+    const client = {
+      query: vi.fn(async (sql: string, values?: unknown[]) => {
+        if (sql.startsWith("SELECT id, username")) return { rows: [user], rowCount: 1 };
+        if (sql.startsWith("UPDATE users")) { storedHash = String(values?.[1]); return { rows: [], rowCount: 1 }; }
+        if (sql.startsWith("INSERT INTO refresh_tokens")) return { rows: [{ id: "00000000-0000-4000-8000-000000000012" }], rowCount: 1 };
+        return { rows: [], rowCount: 1 };
+      }),
+      release: vi.fn(),
+    };
+    const db = { query: vi.fn(), connect: vi.fn(async () => client) } as unknown as Database;
+    const app = await createApp(loadConfig({ NODE_ENV: "test", DATA_ROOT: ".data-test" }), db); opened.push(app);
+    const token = app.jwt.sign({ sub: user.id, username: user.username, systemRole: user.system_role });
+    const response = await app.inject({ method: "POST", url: "/api/v1/auth/password", headers: { authorization: `Bearer ${token}` }, payload: { currentPassword: "current-password", newPassword: "new-password-12345" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ user: { id: user.id, username: user.username, displayName: "Tester" } });
+    await expect(argon2.verify(storedHash, "new-password-12345")).resolves.toBe(true);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE refresh_tokens SET revoked_at"), [user.id]);
+    expect(client.query).toHaveBeenCalledWith("COMMIT");
+    expect(client.release).toHaveBeenCalledOnce();
   });
 });
